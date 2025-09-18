@@ -1,0 +1,1 @@
+void WDT_disable();

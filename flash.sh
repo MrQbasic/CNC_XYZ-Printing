@@ -1,0 +1,1 @@
+openocd -f openocd.cfg -c "init" -c "reset halt" -c "flash write_image erase ./build/firmware.bin 0x400000" -c "flash verify_image ./build/firmware.bin 0x400000" -c "reset" -c "exit"
