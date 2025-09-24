@@ -37,21 +37,25 @@ void __attribute__((interrupt)) UDP_ISR(void){
     LCD_writeString("USB-Int!");
     LCD_setCursor(0,1);
     LCD_writeIntHex(UDP->interrupt_status);
-    IRQ_resetPending(PID_UDP);
+    IRQ_setState(PID_UDP, 3);
     while(1);
 }
 
 
 void UDP_init(){
     LCD_writeString("Start");
+
     //enable USB pins (should be default but you never know)
     MATRIX_IO_USB(0);
+
     //setup the interrupt
     IRQ_setFunction(IRQ_ID_INT_BASE + PID_UDP, &UDP_ISR);
-    IRQ_enable(IRQ_ID_INT_BASE + PID_UDP);
+    IRQ_setState(IRQ_ID_INT_BASE + PID_UDP, 1);
+
     //enable the clocks
     PMC_enablePeripheralClock(PID_UDP);
     PMC_setUSBClock(1);
+
     //setup pull-up
     //reg_write_check(&UDP->transeiver_ctrl, 0x200);
     UDP->interrupt_clear = 0xFFFFFFFF;

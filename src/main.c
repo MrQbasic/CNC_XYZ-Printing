@@ -25,7 +25,7 @@ void __attribute__((interrupt)) PIO_CALL(void){
     int x = *((int*) 0x400E0E4C);  //read ISR from PIO to reset int trigger
 
     cnt++;
-    IRQ_resetPending(PID_PIO_GROUP_A);
+    IRQ_setState(IRQ_ID_INT_BASE + PID_PIO_GROUP_A, 3);
 }
 
 
@@ -35,11 +35,12 @@ void main(){
     init_runtime();
     
     IRQ_init();
-    
+
     LCD_init();
     
     PMC_enableExternalClock();
-    
+
+
     //enable all PIO blocks
     PMC_enablePeripheralClock(PID_PIO_GROUP_A);
     PMC_enablePeripheralClock(PID_PIO_GROUP_B);

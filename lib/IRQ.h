@@ -17,11 +17,8 @@ void IRQ_init();
 //use IRQ_ID_ for exception number
 void IRQ_setFunction(int exceptionNumber, void* func);
 
-//enables the IRQ in the NVIC. only works on IRQs not exceptions
-void IRQ_enable(int exceptionNumber);
-//disables the IRQ in the NVIC. only works on IRQs not exceptions
-void IRQ_disable(int exceptionNumber);
+//state: 0=disable, 1=enable, 2=pending, 3=clear pending
+void IRQ_setState(int exceptionNumber, int state);
 
+//triggers the interrupt
 void IRQ_trigger(int exceptionNumber);
-
-void IRQ_resetPending(int IRQ_ID);

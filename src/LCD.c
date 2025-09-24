@@ -2,8 +2,8 @@
 #include "PIO.h"
 
 
-#define delayPulse 50 * 10 * 3 * 2
-#define delayChar 40 * 10 * 3 * 2
+#define delayPulse 50 * 10 * 3 * 2 * 2
+#define delayChar 90 * 10 * 3 * 2 * 2
 
 //data -> 8bit data
 //type -> 0 = command; 1 = data
@@ -46,9 +46,20 @@ int curX = 0;
 
 
 void LCD_writeChar(char c){
+    int cmd = 1;
+    switch(c){
+        case '\n':
+            curX=15;
+            break;
+
+        default:
+            cmd=0;
+            break;
+    }
+
     curX++;
     if(curX == 17){
-        curX = 1;
+        curX = 0;
         curY++;
         if(curY == 4){
             curY = 0;
@@ -56,12 +67,16 @@ void LCD_writeChar(char c){
         }
         LCD_setCursor(curX, curY);
     }
+
+    if(cmd) return;
     LCD_writeData((int)c, 1, delayChar);
 }
 
 void LCD_clearScreen() {
-    LCD_writeData(0x01, 0, 800);
-    LCD_writeData(0x02, 0, 800);
+    curX = 0;
+    curY = 0;
+    LCD_writeData(0x01, 0, delayChar * 100);
+    LCD_writeData(0x02, 0, delayChar * 100);
 }
 
 
@@ -77,7 +92,7 @@ void LCD_writeString(const char* str){
 int cursorLineCommand[] = {0x80, 0xC0 , 0x90, 0xD0};
 
 void LCD_setCursor(int x, int y){
-    LCD_writeData(cursorLineCommand[y]+x, 0, 600);
+    LCD_writeData(cursorLineCommand[y]+x, 0, delayChar * 100);
     curX = x;
     curY = y;
 }
@@ -99,7 +114,6 @@ void LCD_writeByteBin(int val){
         LCD_writeChar((val & (1 << i)) ? '1' : '0');
     }
 }
-
 
 void LCD_writeInt(int val){
     // Handle negative numbers

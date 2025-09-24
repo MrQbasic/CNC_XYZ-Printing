@@ -2,23 +2,18 @@
 #include "LCD.h"
 
 
-#define SCB_VTOR    0xE000ED08          //Vector Table Offset Register
+#define SCB_VTOR    0xE000ED08                                    //Vector Table Offset Register
+#define SCB_CFSR    0xE000ED28                                    //Configurable Fault Status Register
+#define SCB_HFSR    0xE000ED2C                                    //Hard Fault Status Register
 
-
-#define SCB_CFSR    0xE000ED28  //Configurable Fault Status Register
-#define SCB_HFSR    0xE000ED2C  //HardFault Status Register
-#define SCB_MMFAR   0xE000ED34  //Memory Management Fault Address Register
-#define SCB_BFAR    0xE000ED38  //Bus Fault Address Register
-
-
-//NVIC REGISTERS
-#define NVIC_REG_SET_ENABLE         0xE000E100 //8 Registers
-#define NVIC_REG_CLEAR_ENABLE       0xE000E180 //8 Registers
-#define NVIC_REG_SET_PENDING        0xE000E200 //8 Registers
-#define NVIC_REG_CLEAR_PERNDING     0xE000E280 //8 Registers
-#define NVIC_REG_ACTIVE             0xE000E300 //8 Registers
-#define NVIC_REG_PRIORITY           0xE000E400 //12 Registers
-#define NVIC_REG_SOFTWARE_TRIGGER   0xE000EF00 //1 Registers
+//NVIC REGISTERS as arrays for direct access
+#define NVIC_REG_ENABLE_SET         ((volatile int*)0xE000E100)   //8 Registers
+#define NVIC_REG_ENABLE_CLEAR       ((volatile int*)0xE000E180)   //8 Registers
+#define NVIC_REG_PENDING_SET        ((volatile int*)0xE000E200)   //8 Registers
+#define NVIC_REG_PENDING_CLEAR      ((volatile int*)0xE000E280)   //8 Registers
+#define NVIC_REG_ACTIVE             ((volatile int*)0xE000E300)   //8 Registers
+#define NVIC_REG_PRIORITY           ((volatile int*)0xE000E400)   //13 Registers
+#define NVIC_REG_SOFTWARE_TRIGGER   ((volatile int*)0xE000EF00)   //1 Register
 
 
 volatile unsigned int vectorTable[256] __attribute__((aligned(0x80)));
@@ -27,12 +22,11 @@ extern void* _start;
 
 void __attribute__((interrupt)) defaultISR(){
     LCD_clearScreen();
-    LCD_setCursor(0,0);
-    LCD_writeString("Unhandled INT!");
-    LCD_setCursor(0,1);
-    LCD_writeIntHex(*(volatile int*) NVIC_REG_ACTIVE);
-    LCD_setCursor(0,2);
-    LCD_writeIntHex(*(volatile int*) (NVIC_REG_ACTIVE+4));
+    LCD_clearScreen();
+    LCD_writeString("Unhandled INT!\n");
+
+
+
     while(1);
 }
 
@@ -109,6 +103,11 @@ void IRQ_init(){
     }
     //switch table address
     *((int*) SCB_VTOR) = (int) vectorTable;
+
+    //clear all pending 
+    for(int i=IRQ_ID_INT_BASE; i<IRQ_ID_INT_BASE+47;i++){
+        IRQ_setState(i, 3); 
+    }
 }
 
 void IRQ_setFunction(int exceptionNumber, void* func){
@@ -116,57 +115,57 @@ void IRQ_setFunction(int exceptionNumber, void* func){
 }
 
 
-
-
-void IRQ_enable(int exceptionNumber){
+//state: 0=disable, 1=enable, 2=pending, 3=clear pending
+void IRQ_setState(int exceptionNumber, int state){
+    //check if the interrupt is part of the NVIC
     if(exceptionNumber < IRQ_ID_INT_BASE) return;
     exceptionNumber -= IRQ_ID_INT_BASE;
-    if(exceptionNumber < 32) {
-        *((volatile int*) NVIC_REG_SET_ENABLE) = (1 << exceptionNumber);
-        return;
-    }else if(exceptionNumber <= 46){
-        *((volatile int*) (NVIC_REG_SET_ENABLE+4)) = (1 << (exceptionNumber-32));
 
-        while(1);
-        return;
-    }
-    LCD_clearScreen();
-    LCD_writeString("IRQ Enable Err");
-    LCD_setCursor(0,1);
-    LCD_writeString("Num: ");
-    LCD_writeIntHex(exceptionNumber);
-}
+    int reg = exceptionNumber / 32;
+    int offset = exceptionNumber % 32;
 
-void IRQ_disable(int exceptionNumber){
-    if(exceptionNumber < IRQ_ID_INT_BASE) return;
-    exceptionNumber -= IRQ_ID_INT_BASE;
-    if(exceptionNumber < 32) {
-        *((volatile int*) NVIC_REG_CLEAR_ENABLE) = (1 << exceptionNumber);
-    }else if(exceptionNumber <= 46){
-        exceptionNumber -= 32;
-        *((volatile int*) NVIC_REG_CLEAR_ENABLE+4) = (1 << exceptionNumber);
+    switch(state){
+        //disable
+        case 0:
+            NVIC_REG_ENABLE_CLEAR[reg] = (1 << offset);
+            if(NVIC_REG_ENABLE_SET[reg] & (1 << offset)){
+                LCD_clearScreen("Failed to disable IRQ");
+                while(1);
+            }
+            break;
+        //enable
+        case 1:
+            NVIC_REG_ENABLE_SET[reg] = (1 << offset);
+            if(!(NVIC_REG_ENABLE_SET[reg] & (1 << offset))){
+                LCD_clearScreen("Failed to enable IRQ");
+                while(1);
+            }
+            break;
+        //set pending
+        case 2:
+            NVIC_REG_PENDING_SET[reg] = (1 << offset);
+            if(!(NVIC_REG_PENDING_SET[reg] & (1 << offset))){
+                LCD_clearScreen("Failed to set IRQ pending");
+                while(1);
+            }
+            break;
+        //clear pending
+        case 3:
+            NVIC_REG_PENDING_CLEAR[reg] = (1 << offset);
+            if(NVIC_REG_PENDING_SET[reg] & (1 << offset)){          
+                LCD_clearScreen("Failed to clear IRQ pending");
+                while(1);
+            }
+            break;
+        //unexpected error
+        default:
+            LCD_clearScreen("Unexpected stateError int IRQ_setState");
+            while(1);
     }
-    LCD_clearScreen();
-    LCD_writeString("IRQ Enable Err");
-    LCD_setCursor(0,1);
-    LCD_writeString("Num: ");
-    LCD_writeIntHex(exceptionNumber);
 }
 
 void IRQ_trigger(int exceptionNumber){
     if(exceptionNumber < IRQ_ID_INT_BASE) return;
     exceptionNumber -= IRQ_ID_INT_BASE;
-    *((volatile int*) NVIC_REG_SOFTWARE_TRIGGER) = exceptionNumber;
-}
-
-void IRQ_resetPending(int IRQ_ID){
-    if(IRQ_ID < 32){
-        *((int*) NVIC_REG_CLEAR_PERNDING) = IRQ_ID;
-        //while((*((int*) NVIC_REG_SET_PENDING)) & IRQ_ID);
-    }else{
-        IRQ_ID -= 32;
-        *((int*) NVIC_REG_CLEAR_PERNDING+4) = IRQ_ID;
-        //while((*((int*) NVIC_REG_SET_PENDING+1)) & IRQ_ID);
-
-    }
+    *((int*) NVIC_REG_SOFTWARE_TRIGGER) = exceptionNumber;
 }
